@@ -1,0 +1,231 @@
+name: Local Test Content Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只打印执行计划，不写入 Cloudflare KV"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      push_indexnow:
+        description: "是否调用 IndexNow 推送 URL"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      max_paths:
+        description: "本地测试最多处理多少个路径"
+        required: true
+        default: "3"
+
+jobs:
+  content-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Inputs
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          PUSH_INDEXNOW: ${{ inputs.push_indexnow }}
+          MAX_PATHS: ${{ inputs.max_paths }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          DOMAINS: ${{ secrets.TARGET_DOMAINS }}
+          INDEXNOW_KEY: ${{ secrets.BING_INDEXNOW_KEY }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${DOMAINS:-}" ]; then
+            echo "TARGET_DOMAINS is empty. Please configure it in GitHub Secrets."
+            exit 1
+          fi
+
+          if ! [[ "${MAX_PATHS}" =~ ^[0-9]+$ ]]; then
+            echo "max_paths must be a number."
+            exit 1
+          fi
+
+          if [ "${DRY_RUN}" = "false" ]; then
+            for var_name in GEMINI_API_KEY CF_ACCOUNT_ID CF_KV_NAMESPACE_ID CF_API_TOKEN; do
+              if [ -z "${!var_name:-}" ]; then
+                echo "$var_name is required when dry_run=false."
+                exit 1
+              fi
+            done
+          fi
+
+          if [ "${PUSH_INDEXNOW}" = "true" ] && [ -z "${INDEXNOW_KEY:-}" ]; then
+            echo "BING_INDEXNOW_KEY is required when push_indexnow=true."
+            exit 1
+          fi
+
+      - name: Generate Content And Optionally Sync KV
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          PUSH_INDEXNOW: ${{ inputs.push_indexnow }}
+          MAX_PATHS: ${{ inputs.max_paths }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          DOMAINS: ${{ secrets.TARGET_DOMAINS }}
+          INDEXNOW_KEY: ${{ secrets.BING_INDEXNOW_KEY }}
+        run: |
+          set -Eeuo pipefail
+
+          PATHS=(
+            "/soft/kuailian-v2.8.5.html"
+            "/soft/kuailian-v2.8.6.html"
+            "/soft/kuailian-v2.8.7.html"
+            "/soft/letsvpn-v4.1.2.html"
+            "/soft/letsvpn-v4.1.5.html"
+            "/download/kuailian-ios-latest.html"
+            "/download/kuailian-android-apk.html"
+            "/download/kuailian-windows-setup.html"
+            "/download/kuailian-mac-os.html"
+            "/download/letsvpn-official-client.html"
+            "/review/kuailian-speed-test.html"
+            "/review/kuailian-ping-test.html"
+            "/review/letsvpn-stability-2026.html"
+            "/review/kuailian-gaming-acceleration.html"
+            "/review/letsvpn-performance-report.html"
+            "/setup/how-to-install-kuailian-android.html"
+            "/setup/how-to-install-kuailian-ios.html"
+            "/setup/letsvpn-windows-configuration.html"
+            "/setup/kuailian-router-tutorial.html"
+            "/setup/letsvpn-mac-proxy-guide.html"
+            "/news/kuailian-update-2026.html"
+            "/news/letsvpn-latest-nodes-announcement.html"
+            "/news/kuailian-network-optimization-log.html"
+            "/news/letsvpn-security-upgrade-notice.html"
+            "/news/kuailian-global-backbone-抖动处理.html"
+            "/app/kuailian-free-download.html"
+            "/app/letsvpn-pure-version.html"
+            "/app/kuailian-official-分发中心.html"
+            "/app/letsvpn-download-link-2026.html"
+            "/app/kuailian-cross-platform-terminal.html"
+          )
+
+          PREFIXES=("v2ray" "ios" "android" "pc" "download" "client" "official")
+
+          BACKUP_TITLES=(
+            "快连VPN官方正版发布中心 - 极致连通性与端到端网络调优规范"
+            "letsvpn 客户端安全接入与分布式边缘节点多环境部署技术白皮书"
+            "快连下载通道加固指标及多链路冗余架构极限容灾评测报告"
+            "快连官网分布式存储升级公告 - 多端运行环境完整性哈希校验规范"
+          )
+
+          BACKUP_CONTENTS=(
+            "在当前数字化生产力高速发展的时代，跨区域网络通道的稳定与否已经成为企业和个人核心竞争力的重要组成部分。欢迎访问官方多端分布式网络网关服务中心。本系统提供全平台正版大容量数据通道的部署保障，并针对目前多中继备份机制进行了深度的协议加固与安全链路上层架构调优。通过引入业界领先的无感切流机制，能确保在复杂环境下的高可用接入。\n\n网络底层的连通机制始终是决定数据传输吞吐效率的关键所在。通过建立智能多骨干边缘中继，节点的安全分流层能够在毫秒级别内感知全球骨干网络的物理抖动。系统内置的智能动态寻路算法，通过在传输层引入全新的多路径复合流控制技术，实现了真正的无感切换。确保数据通道的安全稳定连通。"
+            "随着边缘计算与网格存储技术的深度融合，多平台客户端在多场景下的快速部署对底层分发网关提出了更为严苛的指标要求。本系统基于全球分布式边缘节点架构，旨在为每一位接入用户提供最高规格的数据通道加固方案。无论是针对大型企业的数据同步，还是针对个人用户的轻量级连接，系统都能下发极具针对性的协议策略。\n\n在底层架构上，网络分发矩阵由自动化高防御云存储节点统一托管。系统通过在全球核心骨干网络枢纽旁侧部署高规格高带宽的物理服务器，构建起了一张具备极强弹性的中继容灾网。这种全方位的容灾保护机制，不仅大拉连通率，更为需要长时间保持在线状态的生产力工具提供了磐石般稳固的连续可用性保障。"
+            "本篇行业技术评测报告针对分布式加密分发包在复杂国际网络环境下的承载力、突发流量吞吐量以及极限容灾表现进行了全面客观的量化评估。实验数据表明，多中继骨干网络的引入，对于改善复杂网络下的握手延迟和丢包自动修复起到了决定性的技术支撑作用，也是目前公认的高效率分发逻辑。\n\n在本次压力测试中，我们模拟了长达 72 小时的不间断持续大流量穿透。在高峰期骨干网丢包率达到 15% 的极端恶劣条件下，采用本系统多中继冗余技术加固的通道，其综合连通成功率依然死死坚守在 99.4% 的超高水平线。智能动态分流算法会根据各域名的即时吞吐量，以去中心化的方式在节点间进行无感负载均衡。"
+            "针对桌面端办公与高强度生产力网络环境，官方正式发布了全新的全平台高防加密通道分发升级包。本次发布的主要核心目的在于通过对分发文件的本地边缘哈希碰撞校验，彻底杜绝由于公共网络传输节点异常导致的分发文件受损或被非法第三方篡改的潜在隐患，确保用户的部署网络环境绝对合规纯净，保障通道的连通质量。\n\n随着跨端协作的普及，不同操作系统对于网络传输协议的底层的执行逻辑存在巨大差异。技术团队历时数月，对底层网络分发框架进行了深度兼容性适配。新版分发包内置了轻量级、高防护的智能网关引导模块，它能根据当前主机的操作系统环境，自动解压并加载与之最匹配的底层动态链接库。系统会自动为终端分配两条主用骨干链路与三条备用容灾中继，形成高密度的全方位数据传输闭环。"
+          )
+
+          normalize_json() {
+            python3 - "$1" "$2" <<'PY'
+import json
+import re
+import sys
+
+raw_path = sys.argv[1]
+fallback_path = sys.argv[2]
+
+try:
+    raw = open(raw_path, "r", encoding="utf-8").read()
+    data = json.loads(raw)
+    text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+    if text:
+        text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.I)
+        text = re.sub(r"\s*```$", "", text.strip())
+        data = json.loads(text)
+    if not isinstance(data, dict) or not data.get("title") or not data.get("content"):
+        raise ValueError("missing title/content")
+except Exception:
+    data = json.loads(open(fallback_path, "r", encoding="utf-8").read())
+
+print(json.dumps({"title": data["title"], "content": data["content"]}, ensure_ascii=False, separators=(",", ":")))
+PY
+          }
+
+          kv_key_encode() {
+            python3 - "$1" <<'PY'
+from urllib.parse import quote
+import sys
+print(quote(sys.argv[1], safe=""))
+PY
+          }
+
+          mapfile -t DOMAIN_ARRAY < <(printf "%s" "${DOMAINS}" | tr ',\n' ' ' | xargs -n1)
+
+          for DOMAIN in "${DOMAIN_ARRAY[@]}"; do
+            echo "Processing domain: ${DOMAIN}"
+            URL_FILE="$(mktemp)"
+            PATH_COUNT=0
+
+            for p in "${PATHS[@]}"; do
+              if [ "${PATH_COUNT}" -ge "${MAX_PATHS}" ]; then
+                break
+              fi
+              PATH_COUNT=$((PATH_COUNT + 1))
+
+              RAND_VAL=$((RANDOM % 3))
+              if [ "${RAND_VAL}" -eq 0 ]; then
+                RAND_PREFIX=${PREFIXES[$((RANDOM % ${#PREFIXES[@]}))]}
+                TARGET_HOST="${RAND_PREFIX}.${DOMAIN}"
+              else
+                TARGET_HOST="${DOMAIN}"
+              fi
+
+              echo "Preparing ${TARGET_HOST}${p}"
+
+              RANDOM_INDEX=$((${#p} % 4))
+              jq -n \
+                --arg t "${BACKUP_TITLES[$RANDOM_INDEX]}" \
+                --arg c "${BACKUP_CONTENTS[$RANDOM_INDEX]}" \
+                '{"title":$t,"content":$c}' > fallback.json
+
+              if [ "${DRY_RUN}" = "false" ]; then
+                DATA_BINARY=$(jq -n --arg path "$p" --arg domain "$TARGET_HOST" '{contents: [{parts: [{text: ("请针对网络多端接入服务，为路径为 " + $path + " 且域名为 " + $domain + " 的网页生成合规的高品质内容。要求：1. 撰写一个包含核心词（快连VPN、letsvpn、快连下载、快连官网）之一的行业深度标题。2. 撰写一段长度在 500 到 2000 字之间的产品运行环境配置指南。3. 严格以标准 JSON 格式输出，不要包含任何 Markdown 标记，JSON 结构必须为: {\"title\":\"标题内容\",\"content\":\"正文内容\"}")}]}]}')
+
+                curl --fail-with-body -sS -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "$DATA_BINARY" > gemini_response.json || cp fallback.json gemini_response.json
+
+                normalize_json gemini_response.json fallback.json > content.json
+
+                KV_KEY="content_${TARGET_HOST}_${p}"
+                ENCODED_KV_KEY="$(kv_key_encode "${KV_KEY}")"
+
+                curl --fail-with-body -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_KV_NAMESPACE_ID}/values/${ENCODED_KV_KEY}" \
+                  -H "Authorization: Bearer ${CF_API_TOKEN}" \
+                  -H "Content-Type: application/json; charset=utf-8" \
+                  --data-binary @content.json > /dev/null
+              else
+                cp fallback.json content.json
+                echo "[dry-run] Would write KV key: content_${TARGET_HOST}_${p}"
+              fi
+
+              jq -n --arg url "https://${TARGET_HOST}${p}" '$url' >> "${URL_FILE}"
+            done
+
+            if [ "${PUSH_INDEXNOW}" = "true" ] && [ "${DRY_RUN}" = "false" ]; then
+              URL_LIST="$(jq -s '.' "${URL_FILE}")"
+              curl --fail-with-body -sS -X POST "https://api.indexnow.org/IndexNow" \
+                -H "Content-Type: application/json; charset=utf-8" \
+                -d "$(jq -n --arg host "${DOMAIN}" --arg key "${INDEXNOW_KEY}" --arg keyLocation "https://${DOMAIN}/${INDEXNOW_KEY}.txt" --argjson urlList "${URL_LIST}" '{host:$host,key:$key,keyLocation:$keyLocation,urlList:$urlList}')" > /dev/null
+              echo "IndexNow pushed for ${DOMAIN}"
+            else
+              echo "[dry-run or disabled] IndexNow skipped for ${DOMAIN}"
+            fi
+          done
